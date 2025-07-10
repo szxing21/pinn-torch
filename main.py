@@ -10,8 +10,9 @@ from data import (
     get_orig_dataset,
 )
 from trainer import Trainer
-
-
+from generate_gif import generate_flow_animation
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 def process_test_result(
     test_data: torch.Tensor,
     loss: float,
@@ -87,7 +88,14 @@ def main():
     loss = outputs["loss"]
     preds = outputs["preds"]
     process_test_result(test_data, loss, preds, lambda1, lambda2)
-
+    t_vals = np.linspace(0, 1, 10)
+    generate_flow_animation(
+        trainer,
+        min_x,
+        max_x,
+        t_vals,
+        save_dir="gif_frames"
+    )
 
 if __name__ == "__main__":
     main()
