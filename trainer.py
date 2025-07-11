@@ -117,20 +117,28 @@ class Trainer:
                     print(
                         {
                             "step": step,
-                            "loss": round(loss.item(), 6),
+                            "loss": round(loss.item(), 4),
                             "lr": round(
-                                self.optimizer.param_groups[0]["lr"], 4
+                                self.optimizer.param_groups[0]["lr"], 6
                             ),
                             "lambda1": round(self.model.lambda1.item(), 4),
                             "lambda2": round(self.model.lambda2.item(), 4),
-                            "u_loss": round(losses["u_loss"].item(), 6),
-                            "v_loss": round(losses["v_loss"].item(), 6),
-                            "f_u_loss": round(losses["f_u_loss"].item(), 6),
-                            "f_v_loss": round(losses["f_v_loss"].item(), 6),
+                            "u_loss": round(losses["u_loss"].item(), 4),
+                            "v_loss": round(losses["v_loss"].item(), 4),
+                            "f_u_loss": round(losses["f_u_loss"].item(), 4),
+                            "f_v_loss": round(losses["f_v_loss"].item(), 4),
                             "time": round(time() - train_start_time, 1),
+                            "ic_u_loss": round(losses["ic_u_loss"].item(), 4),
+                            "ic_v_loss": round(losses["ic_v_loss"].item(), 4),
+                            "bc_u_loss": round(losses["bc_u_loss"].item(), 4),
+                            "bc_v_loss": round(losses["bc_v_loss"].item(), 4),
                         }
                     )
             self.lr_scheduler.step()
+            current_lr = self.optimizer.param_groups[0]['lr']
+            if current_lr <= 2e-5:   # 或者用一个小阈值，如 1e-6
+                print(f"学习率已降为 {current_lr:.2e}，提前终止训练（epoch {ep}）")
+                break
             self.checkpoint(ep)
             print(f"====== Epoch {ep} done ======")
             ep += 1

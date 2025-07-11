@@ -1,3 +1,4 @@
+# %%
 from pathlib import Path
 import random
 
@@ -49,20 +50,19 @@ def process_test_result(
     # Plot
     pass
 
-
+# %%
 def main():
     torch.random.manual_seed(0)
     random.seed(0)
     np.random.seed(0)
-
+# %%
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
-
     # Data
     # data_path = Path("E:/donny/code/family/00/data/data.jsonl")
     # train_data, test_data, min_x, max_x = get_dataset(data_path)
     train_data, test_data, min_x, max_x = get_orig_dataset()
-
+    # %%
     # Model
     # hidden_dims = [128, 128, 128, 128, 128, 128, 128, 128]
     model = Pinn(min_x, max_x)
@@ -88,7 +88,7 @@ def main():
     loss = outputs["loss"]
     preds = outputs["preds"]
     process_test_result(test_data, loss, preds, lambda1, lambda2)
-    t_vals = np.linspace(0, 1, 10)
+    t_vals = np.linspace(0, 0.1, 10)
     generate_flow_animation(
         trainer,
         min_x,
@@ -96,6 +96,8 @@ def main():
         t_vals,
         save_dir="gif_frames"
     )
-
+# %%
 if __name__ == "__main__":
     main()
+
+# %%

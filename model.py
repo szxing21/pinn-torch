@@ -138,27 +138,82 @@ class Pinn(nn.Module):
             - self.lambda2 * (v_xx + v_yy)
         )
 
-        loss, losses = self.loss_fn(u, v, u_pred, v_pred, f_u, f_v)
+        loss, losses = self.loss_fn(
+        x, y, t,
+        u, v,
+        u_pred, v_pred,
+        f_u, f_v
+         )
         return {
             "preds": preds,
             "loss": loss,
             "losses": losses,
         }
 
-    def loss_fn(self, u, v, u_pred, v_pred, f_u_pred, f_v_pred):
+    def loss_fn(
+        self,
+        x, y, t,
+        u, v,
+        u_pred, v_pred,
+        f_u_pred, f_v_pred,
+    ):
         """
-        u: (b, 1)
-        v: (b, 1)
-        p: (b, 1)
+        Compute total loss including IC and BC losses,
+        directly from the same training batch.
         """
+
+        # ----------------------------
+        # PDE residual loss
+        # ----------------------------
         u_loss = F.mse_loss(u_pred, u)
         v_loss = F.mse_loss(v_pred, v)
         f_u_loss = F.mse_loss(f_u_pred, torch.zeros_like(f_u_pred))
         f_v_loss = F.mse_loss(f_v_pred, torch.zeros_like(f_v_pred))
-        loss = u_loss + v_loss + f_u_loss + f_v_loss
+
+        # ----------------------------
+        # Initial Condition Loss
+        # ----------------------------
+        mask_ic = (t == 0.0)
+        ic_u_loss = torch.tensor(0.0, device=u.device)
+        ic_v_loss = torch.tensor(0.0, device=u.device)
+        if mask_ic.any():
+            ic_u_loss = F.mse_loss(u_pred[mask_ic], u[mask_ic])
+            ic_v_loss = F.mse_loss(v_pred[mask_ic], v[mask_ic])
+
+        # ----------------------------
+        # Boundary Condition Loss
+        # ----------------------------
+        eps = 1e-5
+        mask_bc = (
+            (torch.isclose(x, torch.tensor(1.0, device=x.device), atol=eps)) |
+            (torch.isclose(x, torch.tensor(8.0, device=x.device), atol=eps)) |
+            (torch.isclose(y, torch.tensor(-2.0, device=x.device), atol=eps)) |
+            (torch.isclose(y, torch.tensor(2.0, device=x.device), atol=eps))
+        )
+        bc_u_loss = torch.tensor(0.0, device=u.device)
+        bc_v_loss = torch.tensor(0.0, device=u.device)
+        if mask_bc.any():
+            bc_u_loss = F.mse_loss(u_pred[mask_bc], u[mask_bc])
+            bc_v_loss = F.mse_loss(v_pred[mask_bc], v[mask_bc])
+
+        # ----------------------------
+        # total loss
+        # ----------------------------
+        loss = (
+            u_loss + v_loss +
+            f_u_loss + f_v_loss +
+            ic_u_loss + ic_v_loss +
+            bc_u_loss + bc_v_loss
+        )
+
         return loss, {
             "u_loss": u_loss,
             "v_loss": v_loss,
             "f_u_loss": f_u_loss,
             "f_v_loss": f_v_loss,
+            "ic_u_loss": ic_u_loss,
+            "ic_v_loss": ic_v_loss,
+            "bc_u_loss": bc_u_loss,
+            "bc_v_loss": bc_v_loss,
         }
+
