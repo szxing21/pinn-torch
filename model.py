@@ -38,12 +38,15 @@ class Pinn(nn.Module):
     data points, and the 2nd dim. is the predicted values of p, u, v.
     """
 
-    def __init__(self, min_x: int, max_x: int):
+    def __init__(self, min_x: int, max_x: int, min_y: int, max_y: int, min_t: int, max_t: int):
         super().__init__()
 
         self.MIN_X = min_x
         self.MAX_X = max_x
-
+        self.MIN_Y = min_y
+        self.MAX_Y = max_y
+        self.MIN_T = min_t
+        self.MAX_T = max_t
         # Build FFN network
         self.hidden_dim = 128
         self.num_blocks = 8
@@ -53,8 +56,8 @@ class Pinn(nn.Module):
             FfnBlock(self.hidden_dim) for _ in range(self.num_blocks)
         ])
 
-        self.lambda1 = nn.Parameter(torch.tensor(1.0))
-        self.lambda2 = nn.Parameter(torch.tensor(0.01))
+        self.lambda1 = nn.Parameter(torch.tensor(1.0), requires_grad=True)
+        self.lambda2 = nn.Parameter(torch.tensor(0.01), requires_grad=True)
 
         self.init_weights()
 
@@ -86,8 +89,11 @@ class Pinn(nn.Module):
         inputs: x, y, t
         labels: p, u, v
         """
-        inputs = torch.stack([x, y, t], dim=1)
-        inputs = 2.0 * (inputs - self.MIN_X) / (self.MAX_X - self.MIN_X) - 1.0
+        t1 = 2.0 * (t - self.MIN_T) / (self.MAX_T - self.MIN_T) - 1.0
+        x1 = 2.0 * (x - self.MIN_X) / (self.MAX_X - self.MIN_X) - 1.0
+        y1 = 2.0 * (y - self.MIN_Y) / (self.MAX_Y - self.MIN_Y) - 1.0
+        inputs = torch.stack([x1, y1, t1], dim=1)
+        # inputs = 2.0 * (inputs - self.MIN_X) / (self.MAX_X - self.MIN_X) - 1.0
 
         hidden_output = self.ffn(inputs)
         psi = hidden_output[:, 0]
@@ -112,31 +118,31 @@ class Pinn(nn.Module):
         p_y = calc_grad(p_pred, y)
 
         # This is the original implementation (I think this is incorrect)
-        # f_u = (
-        #     u_t
-        #     + self.lambda1 * (u_pred * u_x + v_pred * u_y)
-        #     + p_x
-        #     - self.lambda2 * (u_xx + u_yy)
-        # )
-        # f_v = (
-        #     v_t
-        #     + self.lambda1 * (u_pred * v_x + v_pred * v_y)
-        #     + p_y
-        #     - self.lambda2 * (v_xx + v_yy)
-        # )
-
-        # # Corrected
         f_u = (
-            self.lambda1 * (u_t + u_pred * u_x + v_pred * u_y)
+            u_t
+            + self.lambda1 * (u_pred * u_x + v_pred * u_y)
             + p_x
             - self.lambda2 * (u_xx + u_yy)
         )
         f_v = (
-            self.lambda1 * (v_t + u_pred * v_x + v_pred * v_y)
-            - self.lambda1 * 9.81
+            v_t
+            + self.lambda1 * (u_pred * v_x + v_pred * v_y)
             + p_y
             - self.lambda2 * (v_xx + v_yy)
         )
+
+        # Corrected
+        # f_u = (
+        #     self.lambda1 * (u_t + u_pred * u_x + v_pred * u_y)
+        #     + p_x
+        #     - self.lambda2 * (u_xx + u_yy)
+        # )
+        # f_v = (
+        #     self.lambda1 * (v_t + u_pred * v_x + v_pred * v_y)
+        #     # - self.lambda1 * 9.81
+        #     + p_y
+        #     - self.lambda2 * (v_xx + v_yy)
+        # )
 
         loss, losses = self.loss_fn(
         x, y, t,
@@ -173,37 +179,37 @@ class Pinn(nn.Module):
         # ----------------------------
         # Initial Condition Loss
         # ----------------------------
-        mask_ic = (t == 0.0)
-        ic_u_loss = torch.tensor(0.0, device=u.device)
-        ic_v_loss = torch.tensor(0.0, device=u.device)
-        if mask_ic.any():
-            ic_u_loss = F.mse_loss(u_pred[mask_ic], u[mask_ic])
-            ic_v_loss = F.mse_loss(v_pred[mask_ic], v[mask_ic])
+        # mask_ic = (t == 0.0)
+        # ic_u_loss = torch.tensor(0.0, device=u.device)
+        # ic_v_loss = torch.tensor(0.0, device=u.device)
+        # if mask_ic.any():
+        #     ic_u_loss = F.mse_loss(u_pred[mask_ic], u[mask_ic])
+        #     ic_v_loss = F.mse_loss(v_pred[mask_ic], v[mask_ic])
 
         # ----------------------------
         # Boundary Condition Loss
         # ----------------------------
-        eps = 1e-5
-        mask_bc = (
-            (torch.isclose(x, torch.tensor(1.0, device=x.device), atol=eps)) |
-            (torch.isclose(x, torch.tensor(8.0, device=x.device), atol=eps)) |
-            (torch.isclose(y, torch.tensor(-2.0, device=x.device), atol=eps)) |
-            (torch.isclose(y, torch.tensor(2.0, device=x.device), atol=eps))
-        )
-        bc_u_loss = torch.tensor(0.0, device=u.device)
-        bc_v_loss = torch.tensor(0.0, device=u.device)
-        if mask_bc.any():
-            bc_u_loss = F.mse_loss(u_pred[mask_bc], u[mask_bc])
-            bc_v_loss = F.mse_loss(v_pred[mask_bc], v[mask_bc])
+        # eps = 1e-5
+        # mask_bc = (
+        #     (torch.isclose(x, torch.tensor(1.0, device=x.device), atol=eps)) |
+        #     (torch.isclose(x, torch.tensor(8.0, device=x.device), atol=eps)) |
+        #     (torch.isclose(y, torch.tensor(-2.0, device=x.device), atol=eps)) |
+        #     (torch.isclose(y, torch.tensor(2.0, device=x.device), atol=eps))
+        # )
+        # bc_u_loss = torch.tensor(0.0, device=u.device)
+        # bc_v_loss = torch.tensor(0.0, device=u.device)
+        # if mask_bc.any():
+        #     bc_u_loss = F.mse_loss(u_pred[mask_bc], u[mask_bc])
+        #     bc_v_loss = F.mse_loss(v_pred[mask_bc], v[mask_bc])
 
         # ----------------------------
         # total loss
         # ----------------------------
         loss = (
             u_loss + v_loss +
-            f_u_loss + f_v_loss +
-            ic_u_loss + ic_v_loss +
-            bc_u_loss + bc_v_loss
+            f_u_loss + f_v_loss
+            # + ic_u_loss + ic_v_loss +
+            # bc_u_loss + bc_v_loss
         )
 
         return loss, {
@@ -211,9 +217,9 @@ class Pinn(nn.Module):
             "v_loss": v_loss,
             "f_u_loss": f_u_loss,
             "f_v_loss": f_v_loss,
-            "ic_u_loss": ic_u_loss,
-            "ic_v_loss": ic_v_loss,
-            "bc_u_loss": bc_u_loss,
-            "bc_v_loss": bc_v_loss,
+            # "ic_u_loss": ic_u_loss,
+            # "ic_v_loss": ic_v_loss,
+            # "bc_u_loss": bc_u_loss,
+            # "bc_v_loss": bc_v_loss,
         }
 

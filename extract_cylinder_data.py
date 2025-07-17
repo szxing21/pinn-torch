@@ -6,6 +6,8 @@ import imageio
 import argparse
 import matplotlib.tri as mtri
 from matplotlib.patches import Circle
+import json
+import re
 
 from data import get_orig_dataset
 
@@ -16,7 +18,62 @@ matplotlib.rcParams['axes.unicode_minus'] = False
 # OpenMP workaround
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+def plot_loss(root_dir="result", output_path="loss_curve.png"):
+    """
+    从 root_dir 下递归查找所有 loss_history.json 文件，
+    将它们拼接成一条连续 loss 曲线。
+    """
 
+    # 存储 (epoch_index, path) 元组
+    all_files = []
+
+    # 搜索所有 loss_history.json
+    for dirpath, _, filenames in os.walk(root_dir):
+        for f in filenames:
+            if f == "loss_history.json":
+                full_path = os.path.join(dirpath, f)
+                # 提取 epoch index
+                match = re.search(r"ckpt-(\d+)", dirpath)
+                if match:
+                    epoch_idx = int(match.group(1))
+                else:
+                    epoch_idx = -1
+                all_files.append( (epoch_idx, full_path) )
+
+    if not all_files:
+        print("没有找到任何 loss_history.json 文件！")
+        return
+
+    # 按 epoch index 排序
+    all_files.sort()
+
+    # 拼接所有 loss
+    full_loss = []
+    for epoch_idx, file_path in all_files:
+        with open(file_path, "r") as f:
+            losses = json.load(f)
+
+        # 确保是 list
+        if not isinstance(losses, list):
+            print(f"不是 list，跳过：{file_path}")
+            continue
+
+        full_loss.extend(losses)
+
+    # 画曲线
+    if full_loss:
+        plt.figure(figsize=(10,5))
+        plt.plot(range(1, len(full_loss)+1), full_loss, color='b')
+        plt.xlabel("Step (across all epochs)")
+        plt.ylabel("Loss")
+        plt.yscale("log")     # 如果跨度太大可以留着
+        plt.grid(True)
+        plt.title("Concatenated Loss Curve")
+        plt.tight_layout()
+        plt.savefig(output_path, dpi=200)
+        print(f"拼接后 loss 曲线已保存: {output_path}")
+    else:
+        print("loss 是空的，未生成曲线。")
 def plot_pinn_frames(
     train_data,
     view_mode="interp",
@@ -145,12 +202,12 @@ def plot_pinn_frames(
                     vmin=vmin,
                     vmax=vmax
                 )
-                ax.contour(
-                    X, Y, field_grid,
-                    levels=10,
-                    colors="k",
-                    linewidths=0.5
-                )
+                # ax.contour(
+                #     X, Y, field_grid,
+                #     levels=10,
+                #     colors="k",
+                #     linewidths=0.5
+                # )
 
             circ = Circle((xc, yc), r, edgecolor='k', fill=False, lw=2)
             ax.add_patch(circ)
@@ -204,7 +261,7 @@ if __name__ == "__main__":
         mode = args.mode
         frames = args.frames
 
-    train_dataset, _, _, _ = get_orig_dataset()
+    train_dataset, _, _, _, _, _, _, _ = get_orig_dataset()
 
     plot_pinn_frames(
         train_data=train_dataset,

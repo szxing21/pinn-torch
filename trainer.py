@@ -16,15 +16,15 @@ class Trainer:
         model: Pinn,
         output_dir: Path = None,
         lr: float = 0.001,
-        num_epochs: int = 40,
-        batch_size: int = 128,
+        num_epochs: int = 1000,
+        batch_size: int = 256,
     ):
         self.model = model
 
         # Hyperparameters
         self.lr = lr
         self.lr_step = 5  # Unit is epoch
-        self.lr_gamma = 0.8
+        self.lr_gamma = 0.99
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.log_interval = 1
@@ -89,13 +89,19 @@ class Trainer:
 
         # Resume
         last_ckpt_dir = self.get_last_ckpt_dir()
+        done_flag_path = self.output_dir / "training_done.txt"
         if do_resume and last_ckpt_dir is not None:
             print(f"Resuming from {last_ckpt_dir}")
             self.load_ckpt(last_ckpt_dir)
             ep = int(last_ckpt_dir.name.split("-")[-1]) + 1
+            if done_flag_path.exists():
+                print("⚠️ 检测到 training_done.txt，训练已完成，跳过训练流程。")
+                return
         else:
             ep = 0
-
+        # done_flag_path = Path(last_ckpt_dir) / "training_done.txt"
+        
+        
         train_start_time = time()
         while ep < self.num_epochs:
             print(f"====== Epoch {ep} ======")
@@ -128,16 +134,18 @@ class Trainer:
                             "f_u_loss": round(losses["f_u_loss"].item(), 4),
                             "f_v_loss": round(losses["f_v_loss"].item(), 4),
                             "time": round(time() - train_start_time, 1),
-                            "ic_u_loss": round(losses["ic_u_loss"].item(), 4),
-                            "ic_v_loss": round(losses["ic_v_loss"].item(), 4),
-                            "bc_u_loss": round(losses["bc_u_loss"].item(), 4),
-                            "bc_v_loss": round(losses["bc_v_loss"].item(), 4),
+                            # "ic_u_loss": round(losses["ic_u_loss"].item(), 4),
+                            # "ic_v_loss": round(losses["ic_v_loss"].item(), 4),
+                            # "bc_u_loss": round(losses["bc_u_loss"].item(), 4),
+                            # "bc_v_loss": round(losses["bc_v_loss"].item(), 4),
                         }
                     )
             self.lr_scheduler.step()
             current_lr = self.optimizer.param_groups[0]['lr']
-            if current_lr <= 2e-5:   # 或者用一个小阈值，如 1e-6
+            if current_lr <= 1e-9:   # 或者用一个小阈值，如 1e-6
                 print(f"学习率已降为 {current_lr:.2e}，提前终止训练（epoch {ep}）")
+                with open(done_flag_path, "w") as f:
+                    f.write(f"Training stopped at epoch {ep} due to small learning rate {current_lr:.6e}\n")
                 break
             self.checkpoint(ep)
             print(f"====== Epoch {ep} done ======")

@@ -12,6 +12,7 @@ from data import (
 )
 from trainer import Trainer
 from generate_gif import generate_flow_animation
+from extract_cylinder_data import plot_loss
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 def process_test_result(
@@ -61,18 +62,19 @@ def main():
     # Data
     # data_path = Path("E:/donny/code/family/00/data/data.jsonl")
     # train_data, test_data, min_x, max_x = get_dataset(data_path)
-    train_data, test_data, min_x, max_x = get_orig_dataset()
+    train_data, test_data, min_x, max_x, min_y, max_y, min_t, max_t = get_orig_dataset()
     # %%
     # Model
     # hidden_dims = [128, 128, 128, 128, 128, 128, 128, 128]
-    model = Pinn(min_x, max_x)
+    model = Pinn(min_x, max_x, min_y, max_y, min_t, max_t)
     num_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {num_params}")
 
     # Train
-    output_dir = Path(
-        "result\pinn-large-tanh-bs128-lr0.005-lrstep1-lrgamma0.8-epoch20")
-    trainer = Trainer(model, output_dir)
+    # output_dir = Path(
+    #     "result\pinn-large-tanh-bs128-lr0.005-lrstep1-lrgamma0.8-epoch20")
+    # trainer = Trainer(model, output_dir)
+    trainer = Trainer(model)
     trainer.train(train_data)
 
     # Test
@@ -88,13 +90,17 @@ def main():
     loss = outputs["loss"]
     preds = outputs["preds"]
     process_test_result(test_data, loss, preds, lambda1, lambda2)
-    t_vals = np.linspace(0, 0.1, 10)
-    generate_flow_animation(
-        trainer,
-        min_x,
-        max_x,
-        t_vals,
-        save_dir="gif_frames"
+    t_vals = np.linspace(0, 30, 300)
+    # generate_flow_animation(
+    #     trainer,
+    #     min_x,
+    #     max_x,
+    #     t_vals,
+    #     save_dir="gif_frames"
+    # )
+    plot_loss(
+        root_dir="result",
+        output_path="loss_curves.png"
     )
 # %%
 if __name__ == "__main__":

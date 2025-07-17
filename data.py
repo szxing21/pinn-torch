@@ -91,6 +91,10 @@ def get_orig_dataset():
 
     min_x = np.min(x)
     max_x = np.max(x)
+    min_y = np.min(y)
+    max_y = np.max(y)
+    min_t = np.min(t)
+    max_t = np.max(t)
 
     NOISE_SCALE = 0.01
     u += NOISE_SCALE * np.std(u) * np.random.randn(*u.shape)
@@ -98,9 +102,9 @@ def get_orig_dataset():
 
     train_data = np.hstack((t, x, y, p, u, v))
     # Randomly sample 1000 points as test data
-    idx = np.random.choice(train_data.shape[0], 1000, replace=False)
+    idx = np.random.choice(train_data.shape[0], 5000, replace=False)
     # idx = np.arange(10000)
     test_data = train_data[idx, :]
     train_data = PinnDataset(train_data)
     test_data = PinnDataset(test_data)
-    return train_data, test_data, min_x, max_x
+    return train_data, test_data, min_x, max_x, min_y, max_y, min_t, max_t
